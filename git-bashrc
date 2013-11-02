@@ -1,0 +1,109 @@
+#!/bin/bash
+
+# Git $PS1
+# https://github.com/qupada/git-bashrc
+# Tested with bash 4.2 and git 1.8
+#
+
+_in_git_repo () {
+    # Check the current dir is actually a repository
+    git status &> /dev/null || return 2
+    # If we are not on a branch we will get annoying errors if we don't do this check
+    git branch | grep -qE '^\* \((no branch|detached from .*)\)' && return 1
+    return 0
+}
+
+_git_branch () {
+    case $(_in_git_repo; echo $?) in
+        0) git symbolic-ref HEAD | sed 's,.*/\([^/]*\)$, \1,g' ;;
+        1) echo -n " *" ;;
+    esac
+}
+
+_git_stats () {
+    # (-commits)?(+commits)? - commits ahead/behind HEAD
+    _in_git_repo && \
+        git branch -v | sed -nre "
+/^\* .* \[(ahead|behind)/ {
+    s,[^[]*\[([^]]*)\].*,\1,g
+    s,behind,-,g
+    s,ahead,+,g
+    s,[^0-9+-],,g
+    p
+}"
+}
+readonly _git_status_expr=( "^[AMDRCU]" "^.[MD]" "^\?\?" )
+_git_status () {
+    # ,N files for 0=staged 1=modified 2=untracked
+    _in_git_repo
+    case $? in
+        0|1) git status --porcelain | grep -Ec "${_git_status_expr[${1}]}" | sed -nr '/^0$/!s/^/,/p' ;;
+    esac
+}
+
+readonly _git_diff_status_expr=( "git diff --cached --stat" "git diff --stat" )
+_git_diff_status() {
+    # [(+lines)?(-lines)?] diff stats for 0=staged or 1=modified
+    _in_git_repo
+    case $? in
+        0|1) ${_git_diff_status_expr[${1}]} | sed -nre "
+$ {
+    s,([0-9]+) (insertion|deletion)s?\(([+-])\),\3\1,g
+    s,[0-9]+ files? changed,,
+    s,[^0-9+-],,g
+    s,.*,[\0],
+    p
+}"
+    esac
+}
+
+# Lower plain, upper bold
+# Most people encode these as \033, I prefer this version
+readonly _red='[00;31m'
+readonly _RED='[01;31m'
+readonly _green='[00;32m'
+readonly _GREEN='[01;32m'
+readonly _yellow='[00;33m'
+readonly _YELLOW='[01;33m'
+readonly _blue='[00;34m'
+readonly _BLUE='[01;34m'
+readonly _magenta='[00;35m'
+readonly _MAGENTA='[01;35m'
+readonly _cyan='[00;36m'
+readonly _CYAN='[01;36m'
+readonly _white='[00;37m'
+readonly _WHITE='[01;37m'
+readonly _reset='[00m'
+
+# From left to right
+#
+# Clock (HH:MM format) - coloured red for $? != 0, yellow otherwise
+# user@host
+# path
+# branch
+# +commits-commits
+# staged file count[+staged lines-staged lines]
+# modified file count[+modified lines-modified lines]
+# untracked file count
+# $
+PS1=\
+'\[${_YELLOW[$?]:-${_RED}}\]\A '\
+\
+'\[$_GREEN\]\u@\h'\
+'\[$_BLUE\] \w'\
+\
+'\[$_cyan\]$(_git_branch)'\
+\
+'\[$_WHITE\]$(_git_stats)'\
+\
+'\[$_BLUE\]$(_git_status 0)'\
+'\[$_blue\]$(_git_diff_status 0)'\
+\
+'\[$_RED\]$(_git_status 1)'\
+'\[$_red\]$(_git_diff_status 1)'\
+\
+'\[$_YELLOW\]$(_git_status 2)'\
+\
+'\[$_BLUE\] \$'\
+\
+'\[$_reset\] '
